@@ -1,0 +1,41 @@
+name: Backend Tests
+
+on:
+  push:
+    branches:
+      - "**"
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-tests.yml"
+  pull_request:
+    branches:
+      - "**"
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-tests.yml"
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Maven Test
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Run backend tests
+        run: mvn test
