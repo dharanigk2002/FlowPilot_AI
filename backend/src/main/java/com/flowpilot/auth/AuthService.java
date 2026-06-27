@@ -5,9 +5,6 @@ import com.flowpilot.user.AppUser;
 import com.flowpilot.user.UserRepository;
 
 import org.springframework.http.HttpStatus;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -18,18 +15,15 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final AuthenticationManager authenticationManager;
     private final JwtTokenService jwtTokenService;
 
     public AuthService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
-            AuthenticationManager authenticationManager,
             JwtTokenService jwtTokenService
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
-        this.authenticationManager = authenticationManager;
         this.jwtTokenService = jwtTokenService;
     }
 
@@ -54,17 +48,10 @@ public class AuthService {
     @Transactional(readOnly = true)
     public AuthResponse login(LoginRequest request) {
         String email = normalizeEmail(request.email());
-
-        try {
-            authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(email, request.password())
-            );
-        } catch (BadCredentialsException exception) {
-            throw new ApplicationException(HttpStatus.UNAUTHORIZED, "Invalid email or password.");
-        }
-
         AppUser user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ApplicationException(HttpStatus.UNAUTHORIZED, "Invalid email or password."));
+        if(!passwordEncoder.matches(request.password(), user.getPasswordHash()))
+            throw new ApplicationException(HttpStatus.UNAUTHORIZED, "Invalid email or password.");
 
         return buildAuthResponse(user);
     }

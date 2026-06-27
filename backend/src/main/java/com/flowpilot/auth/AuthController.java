@@ -1,5 +1,8 @@
 package com.flowpilot.auth;
 
+import com.flowpilot.common.config.OpenApiConfig;
+
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
@@ -33,6 +36,7 @@ public class AuthController {
     }
 
     @GetMapping("/me")
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
     public CurrentUserResponse me(Authentication authentication) {
         return authService.getCurrentUser(authentication);
     }

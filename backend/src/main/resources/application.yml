@@ -32,5 +32,10 @@ logging:
   level:
     root: warn
 
+springdoc:
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+
 server:
   port: ${SERVER_PORT:8080}

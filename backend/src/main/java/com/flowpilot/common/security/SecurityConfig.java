@@ -11,9 +11,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
-import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -38,9 +36,6 @@ import com.nimbusds.jose.jwk.source.ImmutableSecret;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    @Value("${app.cors.allowed-origins}")
-    private List<String> allowedOrigins;
-
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationConverter converter) {
         return http
@@ -53,6 +48,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/health", "/actuator/health", "/api/auth/register", "/api/auth/login")
                         .permitAll()
+                        .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
@@ -62,22 +58,17 @@ public class SecurityConfig {
     }
 
     @Bean
-    AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
-        return configuration.getAuthenticationManager();
-    }
-
-    @Bean
-    PasswordEncoder passwordEncoder() {
+    public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
     @Bean
-    JwtEncoder jwtEncoder(SecretKey jwtSecretKey) {
+    public JwtEncoder jwtEncoder(SecretKey jwtSecretKey) {
         return new NimbusJwtEncoder(new ImmutableSecret<>(jwtSecretKey));
     }
 
     @Bean
-    JwtDecoder jwtDecoder(SecretKey jwtSecretKey) {
+    public JwtDecoder jwtDecoder(SecretKey jwtSecretKey) {
         return NimbusJwtDecoder.withSecretKey(jwtSecretKey)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
@@ -101,7 +92,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    CorsConfigurationSource corsConfigurationSource() {
+    public CorsConfigurationSource corsConfigurationSource(@Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
