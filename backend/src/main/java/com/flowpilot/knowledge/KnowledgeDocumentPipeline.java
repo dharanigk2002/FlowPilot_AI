@@ -31,9 +31,14 @@ public class KnowledgeDocumentPipeline {
     ) {
         Resource resource = namedResource(content, fileName);
         List<Document> extractedDocuments = new TikaDocumentReader(resource).read();
+        for (Document doc : extractedDocuments) {
+            String text = doc.getText();
+            System.out.println("Text length: " + (text == null ? 0 : text.length()));
+            System.out.println("Preview: " + (text == null ? null : text.substring(0, Math.min(300, text.length()))));
+        }
         List<Document> sourceDocuments = extractedDocuments.stream()
-                .filter(Document::isText)
-                .filter(document -> document.getText() != null && !document.getText().isBlank())
+//                .filter(Document::isText)
+//                .filter(document -> document.getText() != null && !document.getText().isBlank())
                 .map(document -> withSourceMetadata(document, documentId, fileName, contentType))
                 .toList();
 
