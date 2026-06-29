@@ -9,3 +9,10 @@ spring:
       ddl-auto: validate
   flyway:
     enabled: true
+    target: 4
+  ai:
+    model:
+      chat: none
+      embedding: none
+    vectorstore:
+      type: none
