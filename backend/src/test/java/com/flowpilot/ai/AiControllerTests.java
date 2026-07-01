@@ -8,6 +8,7 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static com.flowpilot.testsupport.SecurityTestSupport.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -16,6 +17,8 @@ import java.util.Map;
 
 import com.flowpilot.auth.RegisterRequest;
 import com.flowpilot.user.UserRole;
+
+import jakarta.servlet.http.Cookie;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,15 +30,14 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
 
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest
@@ -49,6 +51,9 @@ class AiControllerTests {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private CsrfTokenRepository csrfTokenRepository;
 
     @MockitoBean
     private VectorStore vectorStore;
@@ -76,7 +81,7 @@ class AiControllerTests {
 
     @Test
     void returnsGroundedAnswerWithCitations() throws Exception {
-        String token = registerAgent();
+        Cookie authCookie = registerAgent();
         Document policyChunk = policyChunk();
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(policyChunk));
         when(responseSpec.content()).thenReturn(
@@ -84,7 +89,8 @@ class AiControllerTests {
         );
 
         mockMvc.perform(post("/api/ai/chat")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .cookie(authCookie)
+                        .with(csrf(csrfTokenRepository))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(question("Can Rahul receive a refund for the late premium delivery?")))
                 .andExpect(status().isOk())
@@ -114,11 +120,12 @@ class AiControllerTests {
 
     @Test
     void returnsInsufficientEvidenceWithoutCallingChatModel() throws Exception {
-        String token = registerAgent();
+        Cookie authCookie = registerAgent();
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
 
         mockMvc.perform(post("/api/ai/chat")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .cookie(authCookie)
+                        .with(csrf(csrfTokenRepository))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(question("What is the policy for lunar deliveries?")))
                 .andExpect(status().isOk())
@@ -133,12 +140,13 @@ class AiControllerTests {
 
     @Test
     void returnsBadGatewayWhenChatProviderFails() throws Exception {
-        String token = registerAgent();
+        Cookie authCookie = registerAgent();
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(policyChunk()));
         when(responseSpec.content()).thenThrow(new IllegalStateException("Provider unavailable"));
 
         mockMvc.perform(post("/api/ai/chat")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .cookie(authCookie)
+                        .with(csrf(csrfTokenRepository))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(question("What refund applies?")))
                 .andExpect(status().isBadGateway())
@@ -147,10 +155,11 @@ class AiControllerTests {
 
     @Test
     void rejectsBlankQuestion() throws Exception {
-        String token = registerAgent();
+        Cookie authCookie = registerAgent();
 
         mockMvc.perform(post("/api/ai/chat")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .cookie(authCookie)
+                        .with(csrf(csrfTokenRepository))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(question(" ")))
                 .andExpect(status().isBadRequest())
@@ -161,6 +170,7 @@ class AiControllerTests {
     @Test
     void requiresAuthentication() throws Exception {
         mockMvc.perform(post("/api/ai/chat")
+                        .with(csrf(csrfTokenRepository))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(question("What refund applies?")))
                 .andExpect(status().isUnauthorized());
@@ -178,7 +188,7 @@ class AiControllerTests {
                 .build();
     }
 
-    private String registerAgent() throws Exception {
+    private Cookie registerAgent() throws Exception {
         RegisterRequest request = new RegisterRequest(
                 "rag.agent@flowpilot.test",
                 "RAG Agent",
@@ -186,20 +196,17 @@ class AiControllerTests {
                 UserRole.SUPPORT_AGENT
         );
         MvcResult result = mockMvc.perform(post("/api/auth/register")
+                        .with(csrf(csrfTokenRepository))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andReturn();
 
-        JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
-        return response.get("accessToken").asText();
+        return result.getResponse().getCookie("FLOWPILOT_ACCESS_TOKEN");
     }
 
     private String question(String question) throws Exception {
         return objectMapper.writeValueAsString(new RagChatRequest(question));
     }
 
-    private String bearer(String token) {
-        return "Bearer " + token;
-    }
 }

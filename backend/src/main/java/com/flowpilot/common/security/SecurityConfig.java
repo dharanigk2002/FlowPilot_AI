@@ -1,12 +1,17 @@
 package com.flowpilot.common.security;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 
+import com.flowpilot.auth.AuthCookieProperties;
+import com.nimbusds.jose.jwk.source.ImmutableSecret;
+
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
@@ -22,41 +27,88 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import com.nimbusds.jose.jwk.source.ImmutableSecret;
-
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
+@EnableConfigurationProperties(AuthCookieProperties.class)
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationConverter converter) {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            JwtAuthenticationConverter converter,
+            BearerTokenResolver bearerTokenResolver,
+            CsrfTokenRepository csrfTokenRepository
+    ) {
         return http
-                .csrf(AbstractHttpConfigurer::disable)
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(csrfTokenRepository)
+                        .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+                )
                 .cors(Customizer.withDefaults())
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/api/health", "/actuator/health", "/api/auth/register", "/api/auth/login")
+                        .requestMatchers(
+                                "/api/health",
+                                "/actuator/health",
+                                "/api/auth/register",
+                                "/api/auth/login",
+                                "/api/auth/logout",
+                                "/api/auth/csrf"
+                        )
                         .permitAll()
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
+                        .bearerTokenResolver(bearerTokenResolver)
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(converter))
                 )
                 .build();
+    }
+
+    @Bean
+    public BearerTokenResolver bearerTokenResolver(AuthCookieProperties properties) {
+        return request -> {
+            if (request.getCookies() == null) {
+                return null;
+            }
+            return Arrays.stream(request.getCookies())
+                    .filter(cookie -> properties.name().equals(cookie.getName()))
+                    .map(jakarta.servlet.http.Cookie::getValue)
+                    .filter(value -> !value.isBlank())
+                    .findFirst()
+                    .orElse(null);
+        };
+    }
+
+    @Bean
+    public CsrfTokenRepository csrfTokenRepository(AuthCookieProperties properties) {
+        CookieCsrfTokenRepository repository = new CookieCsrfTokenRepository();
+        repository.setHeaderName("X-XSRF-TOKEN");
+        repository.setCookieCustomizer(cookie -> cookie
+                .httpOnly(true)
+                .secure(properties.secure())
+                .sameSite(properties.sameSite())
+                .path("/")
+        );
+        return repository;
     }
 
     @Bean
@@ -101,10 +153,9 @@ public class SecurityConfig {
         configuration.setAllowedHeaders(List.of(
                 HttpHeaders.AUTHORIZATION,
                 HttpHeaders.CONTENT_TYPE,
-                HttpHeaders.ACCEPT
+                HttpHeaders.ACCEPT,
+                "X-XSRF-TOKEN"
         ));
-        // If backend sends token in header so frontend can read as response.headers.get("Authorization")
-        configuration.setExposedHeaders(List.of(HttpHeaders.AUTHORIZATION));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 

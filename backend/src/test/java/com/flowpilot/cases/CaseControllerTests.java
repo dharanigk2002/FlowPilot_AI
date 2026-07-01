@@ -3,6 +3,7 @@ package com.flowpilot.cases;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static com.flowpilot.testsupport.SecurityTestSupport.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -11,18 +12,19 @@ import java.math.BigDecimal;
 import com.flowpilot.auth.RegisterRequest;
 import com.flowpilot.user.UserRole;
 
+import jakarta.servlet.http.Cookie;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
 
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest
@@ -37,12 +39,16 @@ class CaseControllerTests {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private CsrfTokenRepository csrfTokenRepository;
+
     @Test
     void supportAgentCreatesCaseWithOpenStatus() throws Exception {
-        String token = register("aman.agent@swiftcart.test", UserRole.SUPPORT_AGENT);
+        Cookie authCookie = register("aman.agent@swiftcart.test", UserRole.SUPPORT_AGENT);
 
         mockMvc.perform(post("/api/cases")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .cookie(authCookie)
+                        .with(csrf(csrfTokenRepository))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(rahulCase())))
                 .andExpect(status().isCreated())
@@ -57,11 +63,11 @@ class CaseControllerTests {
 
     @Test
     void authenticatedUserListsAndReadsCases() throws Exception {
-        String token = register("list.agent@swiftcart.test", UserRole.SUPPORT_AGENT);
-        long caseId = createCase(token);
+        Cookie authCookie = register("list.agent@swiftcart.test", UserRole.SUPPORT_AGENT);
+        long caseId = createCase(authCookie);
 
         mockMvc.perform(get("/api/cases")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                        .cookie(authCookie))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].id").value(caseId))
                 .andExpect(jsonPath("$.page").value(0))
@@ -69,7 +75,7 @@ class CaseControllerTests {
                 .andExpect(jsonPath("$.totalElements").value(1));
 
         mockMvc.perform(get("/api/cases/{id}", caseId)
-                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                        .cookie(authCookie))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(caseId))
                 .andExpect(jsonPath("$.description").value(rahulCase().description()));
@@ -77,13 +83,14 @@ class CaseControllerTests {
 
     @Test
     void managerUpdatesCaseStatus() throws Exception {
-        String agentToken = register("create.agent@swiftcart.test", UserRole.SUPPORT_AGENT);
-        String managerToken = register("priya.manager@swiftcart.test", UserRole.MANAGER);
-        long caseId = createCase(agentToken);
+        Cookie agentCookie = register("create.agent@swiftcart.test", UserRole.SUPPORT_AGENT);
+        Cookie managerCookie = register("priya.manager@swiftcart.test", UserRole.MANAGER);
+        long caseId = createCase(agentCookie);
 
         UpdateCaseStatusRequest request = new UpdateCaseStatusRequest(CaseStatus.PENDING_MANAGER_REVIEW);
         mockMvc.perform(patch("/api/cases/{id}/status", caseId)
-                        .header(HttpHeaders.AUTHORIZATION, bearer(managerToken))
+                        .cookie(managerCookie)
+                        .with(csrf(csrfTokenRepository))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -92,12 +99,13 @@ class CaseControllerTests {
 
     @Test
     void supportAgentCannotUpdateCaseStatus() throws Exception {
-        String token = register("restricted.agent@swiftcart.test", UserRole.SUPPORT_AGENT);
-        long caseId = createCase(token);
+        Cookie authCookie = register("restricted.agent@swiftcart.test", UserRole.SUPPORT_AGENT);
+        long caseId = createCase(authCookie);
 
         UpdateCaseStatusRequest request = new UpdateCaseStatusRequest(CaseStatus.RESOLVED);
         mockMvc.perform(patch("/api/cases/{id}/status", caseId)
-                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .cookie(authCookie)
+                        .with(csrf(csrfTokenRepository))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isForbidden());
@@ -105,7 +113,7 @@ class CaseControllerTests {
 
     @Test
     void createCaseRejectsInvalidRequest() throws Exception {
-        String token = register("validation.agent@swiftcart.test", UserRole.SUPPORT_AGENT);
+        Cookie authCookie = register("validation.agent@swiftcart.test", UserRole.SUPPORT_AGENT);
         CreateCaseRequest invalidRequest = new CreateCaseRequest(
                 " ",
                 "Delayed delivery",
@@ -118,7 +126,8 @@ class CaseControllerTests {
         );
 
         mockMvc.perform(post("/api/cases")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .cookie(authCookie)
+                        .with(csrf(csrfTokenRepository))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(invalidRequest)))
                 .andExpect(status().isBadRequest())
@@ -136,17 +145,18 @@ class CaseControllerTests {
 
     @Test
     void returnsNotFoundForUnknownCase() throws Exception {
-        String token = register("lookup.agent@swiftcart.test", UserRole.SUPPORT_AGENT);
+        Cookie authCookie = register("lookup.agent@swiftcart.test", UserRole.SUPPORT_AGENT);
 
         mockMvc.perform(get("/api/cases/{id}", 999999)
-                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                        .cookie(authCookie))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Case not found."));
     }
 
-    private long createCase(String token) throws Exception {
+    private long createCase(Cookie authCookie) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/cases")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .cookie(authCookie)
+                        .with(csrf(csrfTokenRepository))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(rahulCase())))
                 .andExpect(status().isCreated())
@@ -155,16 +165,16 @@ class CaseControllerTests {
         return objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asLong();
     }
 
-    private String register(String email, UserRole role) throws Exception {
+    private Cookie register(String email, UserRole role) throws Exception {
         RegisterRequest request = new RegisterRequest(email, "FlowPilot User", "StrongPass123", role);
         MvcResult result = mockMvc.perform(post("/api/auth/register")
+                        .with(csrf(csrfTokenRepository))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andReturn();
 
-        JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
-        return response.get("accessToken").asText();
+        return result.getResponse().getCookie("FLOWPILOT_ACCESS_TOKEN");
     }
 
     private CreateCaseRequest rahulCase() {
@@ -180,7 +190,4 @@ class CaseControllerTests {
         );
     }
 
-    private String bearer(String token) {
-        return "Bearer " + token;
-    }
 }

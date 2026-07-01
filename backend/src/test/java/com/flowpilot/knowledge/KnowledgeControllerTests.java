@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static com.flowpilot.testsupport.SecurityTestSupport.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -20,6 +21,8 @@ import com.flowpilot.auth.RegisterRequest;
 import com.flowpilot.user.UserRepository;
 import com.flowpilot.user.UserRole;
 
+import jakarta.servlet.http.Cookie;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -29,15 +32,14 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
 
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest
@@ -57,6 +59,9 @@ class KnowledgeControllerTests {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private CsrfTokenRepository csrfTokenRepository;
+
     @MockitoBean
     private VectorStore vectorStore;
 
@@ -69,12 +74,13 @@ class KnowledgeControllerTests {
 
     @Test
     void adminUploadsAndIndexesTextDocument() throws Exception {
-        String token = register("knowledge.admin@flowpilot.test", UserRole.ADMIN);
+        Cookie authCookie = register("knowledge.admin@flowpilot.test", UserRole.ADMIN);
         MockMultipartFile file = textPolicyFile();
 
         mockMvc.perform(multipart("/api/documents")
                         .file(file)
-                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                        .cookie(authCookie)
+                        .with(csrf(csrfTokenRepository)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.fileName").value("premium-delivery-policy.txt"))
                 .andExpect(jsonPath("$.contentType").value(MediaType.TEXT_PLAIN_VALUE))
@@ -96,18 +102,19 @@ class KnowledgeControllerTests {
 
     @Test
     void supportAgentCannotUploadKnowledgeDocument() throws Exception {
-        String token = register("knowledge.agent@flowpilot.test", UserRole.SUPPORT_AGENT);
+        Cookie authCookie = register("knowledge.agent@flowpilot.test", UserRole.SUPPORT_AGENT);
 
         mockMvc.perform(multipart("/api/documents")
                         .file(textPolicyFile())
-                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                        .cookie(authCookie)
+                        .with(csrf(csrfTokenRepository)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.message").value("You do not have permission to perform this action."));
     }
 
     @Test
     void rejectsUnsupportedFileType() throws Exception {
-        String token = register("media.admin@flowpilot.test", UserRole.ADMIN);
+        Cookie authCookie = register("media.admin@flowpilot.test", UserRole.ADMIN);
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 "policy.exe",
@@ -117,20 +124,22 @@ class KnowledgeControllerTests {
 
         mockMvc.perform(multipart("/api/documents")
                         .file(file)
-                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                        .cookie(authCookie)
+                        .with(csrf(csrfTokenRepository)))
                 .andExpect(status().isUnsupportedMediaType())
                 .andExpect(jsonPath("$.message").value("Only PDF, DOCX, and plain-text documents are supported."));
     }
 
     @Test
     void failedVectorWriteLeavesFailedDocumentRecord() throws Exception {
-        String token = register("failure.admin@flowpilot.test", UserRole.ADMIN);
+        Cookie authCookie = register("failure.admin@flowpilot.test", UserRole.ADMIN);
         doThrow(new IllegalStateException("Vector store unavailable"))
                 .when(vectorStore).add(any());
 
         mockMvc.perform(multipart("/api/documents")
                         .file(textPolicyFile())
-                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                        .cookie(authCookie)
+                        .with(csrf(csrfTokenRepository)))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.message").value("The document could not be processed."));
 
@@ -142,19 +151,19 @@ class KnowledgeControllerTests {
 
     @Test
     void authenticatedUserListsAndReadsDocuments() throws Exception {
-        String adminToken = register("catalog.admin@flowpilot.test", UserRole.ADMIN);
-        upload(adminToken);
-        String agentToken = register("catalog.agent@flowpilot.test", UserRole.SUPPORT_AGENT);
+        Cookie adminCookie = register("catalog.admin@flowpilot.test", UserRole.ADMIN);
+        upload(adminCookie);
+        Cookie agentCookie = register("catalog.agent@flowpilot.test", UserRole.SUPPORT_AGENT);
         Long documentId = documentRepository.findAll().getFirst().getId();
 
         mockMvc.perform(get("/api/documents")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(agentToken)))
+                        .cookie(agentCookie))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].id").value(documentId))
                 .andExpect(jsonPath("$.totalElements").value(1));
 
         mockMvc.perform(get("/api/documents/{id}", documentId)
-                        .header(HttpHeaders.AUTHORIZATION, bearer(agentToken)))
+                        .cookie(agentCookie))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(documentId))
                 .andExpect(jsonPath("$.status").value("READY"));
@@ -162,7 +171,7 @@ class KnowledgeControllerTests {
 
     @Test
     void authenticatedUserSearchesByMeaning() throws Exception {
-        String token = register("search.agent@flowpilot.test", UserRole.SUPPORT_AGENT);
+        Cookie authCookie = register("search.agent@flowpilot.test", UserRole.SUPPORT_AGENT);
         Document result = Document.builder()
                 .text("Premium customers receive a delivery fee refund after a 48-hour delay.")
                 .metadata(Map.of(
@@ -176,7 +185,8 @@ class KnowledgeControllerTests {
         KnowledgeSearchRequest request = new KnowledgeSearchRequest("compensation for late delivery", 3, 0.7);
 
         mockMvc.perform(post("/api/documents/search")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .cookie(authCookie)
+                        .with(csrf(csrfTokenRepository))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -191,23 +201,24 @@ class KnowledgeControllerTests {
         assertThat(requestCaptor.getValue().getSimilarityThreshold()).isEqualTo(0.7);
     }
 
-    private void upload(String token) throws Exception {
+    private void upload(Cookie authCookie) throws Exception {
         mockMvc.perform(multipart("/api/documents")
                         .file(textPolicyFile())
-                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                        .cookie(authCookie)
+                        .with(csrf(csrfTokenRepository)))
                 .andExpect(status().isCreated());
     }
 
-    private String register(String email, UserRole role) throws Exception {
+    private Cookie register(String email, UserRole role) throws Exception {
         RegisterRequest request = new RegisterRequest(email, "Knowledge User", "StrongPass123", role);
         MvcResult result = mockMvc.perform(post("/api/auth/register")
+                        .with(csrf(csrfTokenRepository))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andReturn();
 
-        JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
-        return response.get("accessToken").asText();
+        return result.getResponse().getCookie("FLOWPILOT_ACCESS_TOKEN");
     }
 
     private MockMultipartFile textPolicyFile() {
@@ -221,7 +232,4 @@ class KnowledgeControllerTests {
         );
     }
 
-    private String bearer(String token) {
-        return "Bearer " + token;
-    }
 }

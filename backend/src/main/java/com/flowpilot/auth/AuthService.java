@@ -28,7 +28,7 @@ public class AuthService {
     }
 
     @Transactional
-    public AuthResponse register(RegisterRequest request) {
+    public AuthenticatedSession register(RegisterRequest request) {
         String email = normalizeEmail(request.email());
         if (userRepository.existsByEmail(email)) {
             throw new ApplicationException(HttpStatus.CONFLICT, "A user with this email already exists.");
@@ -46,7 +46,7 @@ public class AuthService {
     }
 
     @Transactional(readOnly = true)
-    public AuthResponse login(LoginRequest request) {
+    public AuthenticatedSession login(LoginRequest request) {
         String email = normalizeEmail(request.email());
         AppUser user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ApplicationException(HttpStatus.UNAUTHORIZED, "Invalid email or password."));
@@ -64,7 +64,7 @@ public class AuthService {
         return new CurrentUserResponse(user.getId(), user.getEmail(), user.getDisplayName(), user.getRole());
     }
 
-    private AuthResponse buildAuthResponse(AppUser user) {
+    private AuthenticatedSession buildAuthResponse(AppUser user) {
         String token = jwtTokenService.generateToken(user);
         AuthResponse.UserSummary userSummary = new AuthResponse.UserSummary(
                 user.getId(),
@@ -73,7 +73,7 @@ public class AuthService {
                 user.getRole()
         );
 
-        return AuthResponse.bearer(token, jwtTokenService.getExpirationSeconds(), userSummary);
+        return new AuthenticatedSession(token, jwtTokenService.getExpirationSeconds(), userSummary);
     }
 
     private String normalizeEmail(String email) {
