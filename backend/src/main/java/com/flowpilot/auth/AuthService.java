@@ -3,6 +3,7 @@ package com.flowpilot.auth;
 import com.flowpilot.common.exception.ApplicationException;
 import com.flowpilot.user.AppUser;
 import com.flowpilot.user.UserRepository;
+import com.flowpilot.user.UserRole;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -38,7 +39,7 @@ public class AuthService {
                 email,
                 request.displayName().trim(),
                 passwordEncoder.encode(request.password()),
-                request.role()
+                UserRole.SUPPORT_AGENT
         );
 
         AppUser savedUser = userRepository.save(user);

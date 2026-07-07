@@ -14,10 +14,22 @@ public record CaseResponse(
         BigDecimal orderValue,
         CasePriority priority,
         CaseStatus status,
+        boolean active,
+        Instant closedAt,
+        Instant archivedAt,
+        AgentRecommendationSummary agentRecommendation,
         CreatorSummary createdBy,
         Instant createdAt,
         Instant updatedAt
 ) {
     public record CreatorSummary(Long id, String email, String displayName) {
+    }
+
+    public record AgentRecommendationSummary(
+            AgentSuggestedAction suggestedAction,
+            String notes,
+            CreatorSummary recommendedBy,
+            Instant recommendedAt
+    ) {
     }
 }

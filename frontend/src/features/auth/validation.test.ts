@@ -11,9 +11,11 @@ describe("authentication validation", () => {
     expect(loginSchema.safeParse({ email: "not-an-email", password: "short" }).success).toBe(false);
   });
 
-  it("allows only backend-supported roles", () => {
-    const base = { email: "admin@flowpilot.test", displayName: "Admin User", password: "StrongPass123" };
-    expect(registerSchema.safeParse({ ...base, role: "ADMIN" }).success).toBe(true);
-    expect(registerSchema.safeParse({ ...base, role: "OWNER" }).success).toBe(false);
+  it("validates public registration without accepting a role choice", () => {
+    expect(registerSchema.safeParse({
+      email: "agent@flowpilot.test",
+      displayName: "Agent User",
+      password: "StrongPass123",
+    }).success).toBe(true);
   });
 });

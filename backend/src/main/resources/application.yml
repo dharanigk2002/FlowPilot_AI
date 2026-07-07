@@ -63,6 +63,10 @@ app:
     jwt:
       secret: ${JWT_SECRET:change-this-development-secret-to-a-long-random-value}
       expiration-seconds: ${JWT_EXPIRATION_SECONDS:3600}
+    initial-admin:
+      email: ${INITIAL_ADMIN_EMAIL:}
+      display-name: ${INITIAL_ADMIN_DISPLAY_NAME:FlowPilot Admin}
+      password: ${INITIAL_ADMIN_PASSWORD:}
 
 management:
   endpoints:

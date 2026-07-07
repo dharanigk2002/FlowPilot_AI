@@ -7,7 +7,6 @@ export const loginSchema = z.object({
 
 export const registerSchema = loginSchema.extend({
   displayName: z.string().trim().min(2, "Display name must contain at least 2 characters.").max(120),
-  role: z.enum(["ADMIN", "MANAGER", "SUPPORT_AGENT"]),
 });
 
 export type LoginValues = z.infer<typeof loginSchema>;

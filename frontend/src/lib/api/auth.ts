@@ -1,5 +1,5 @@
 import { apiRequest, clearCsrfToken, refreshCsrfToken } from "./client";
-import type { AuthResponse, CurrentUser, UserRole } from "./types";
+import type { AuthResponse, CurrentUser } from "./types";
 
 export interface LoginInput {
   email: string;
@@ -8,7 +8,6 @@ export interface LoginInput {
 
 export interface RegisterInput extends LoginInput {
   displayName: string;
-  role: UserRole;
 }
 
 export async function login(input: LoginInput) {

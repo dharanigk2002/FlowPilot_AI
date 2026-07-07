@@ -7,6 +7,7 @@ import {
   FileText,
   LogOut,
   ShieldCheck,
+  UsersRound,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -22,6 +23,10 @@ const navigation = [
   { href: "/cases", label: "Cases", icon: BriefcaseBusiness },
   { href: "/knowledge", label: "Knowledge", icon: FileText },
   { href: "/assistant", label: "Assistant", icon: Bot },
+];
+
+const adminNavigation = [
+  { href: "/admin/users", label: "Users", icon: UsersRound },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -53,7 +58,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-slate-50 lg:grid lg:grid-cols-[250px_1fr]">
-      <aside className="hidden min-h-screen border-r border-slate-800 bg-slate-950 px-4 py-6 text-white lg:flex lg:flex-col">
+      <aside className="sticky top-0 hidden h-screen overflow-hidden border-r border-slate-800 bg-slate-950 px-4 py-6 text-white lg:flex lg:flex-col">
         <Link
           href="/cases"
           className="flex items-center gap-3 px-2 text-lg font-bold"
@@ -63,8 +68,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           </span>
           FlowPilot AI
         </Link>
-        <nav className="mt-10 space-y-1" aria-label="Main navigation">
-          {navigation.map((item) => {
+        <nav className="mt-10 flex-1 space-y-1 overflow-y-auto" aria-label="Main navigation">
+          {[...navigation, ...(user.role === "ADMIN" ? adminNavigation : [])].map((item) => {
             const active =
               pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
@@ -117,7 +122,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             className="mt-3 flex gap-1 overflow-x-auto"
             aria-label="Mobile navigation"
           >
-            {navigation.map((item) => (
+            {[...navigation, ...(user.role === "ADMIN" ? adminNavigation : [])].map((item) => (
               <Link
                 key={item.href}
                 href={item.href}

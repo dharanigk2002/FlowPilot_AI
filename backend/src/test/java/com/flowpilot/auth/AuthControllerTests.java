@@ -12,8 +12,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.flowpilot.user.UserRepository;
-import com.flowpilot.user.UserRole;
-
 import jakarta.servlet.http.Cookie;
 
 import org.junit.jupiter.api.Test;
@@ -53,8 +51,7 @@ class AuthControllerTests {
         RegisterRequest request = new RegisterRequest(
                 "Aman.Agent@swiftcart.test",
                 "Aman Agent",
-                "StrongPass123",
-                UserRole.SUPPORT_AGENT
+                "StrongPass123"
         );
 
         mockMvc.perform(post("/api/auth/register")
@@ -84,8 +81,7 @@ class AuthControllerTests {
         RegisterRequest request = new RegisterRequest(
                 "priya.manager@swiftcart.test",
                 "Priya Manager",
-                "StrongPass123",
-                UserRole.MANAGER
+                "StrongPass123"
         );
 
         mockMvc.perform(post("/api/auth/register")
@@ -210,8 +206,7 @@ class AuthControllerTests {
         RegisterRequest request = new RegisterRequest(
                 "rahul.agent@swiftcart.test",
                 "Rahul Agent",
-                "StrongPass123",
-                UserRole.SUPPORT_AGENT
+                "StrongPass123"
         );
 
         MvcResult result = mockMvc.perform(post("/api/auth/register")

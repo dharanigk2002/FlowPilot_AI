@@ -1,5 +1,6 @@
 package com.flowpilot.cases;
 
+import com.flowpilot.ai.RagChatResponse;
 import com.flowpilot.common.config.OpenApiConfig;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -58,5 +59,19 @@ public class CaseController {
             @Valid @RequestBody UpdateCaseStatusRequest request
     ) {
         return caseService.updateStatus(id, request);
+    }
+
+    @PostMapping("/{id}/agent-recommendation")
+    public CaseResponse submitAgentRecommendation(
+            @PathVariable @Positive Long id,
+            @Valid @RequestBody SubmitAgentRecommendationRequest request,
+            Authentication authentication
+    ) {
+        return caseService.submitAgentRecommendation(id, request, authentication);
+    }
+
+    @PostMapping("/{id}/recommendation")
+    public RagChatResponse recommendResolution(@PathVariable @Positive Long id) {
+        return caseService.recommendResolution(id);
     }
 }

@@ -17,7 +17,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
-import com.flowpilot.auth.RegisterRequest;
+import com.flowpilot.auth.LoginRequest;
+import com.flowpilot.user.AppUser;
 import com.flowpilot.user.UserRepository;
 import com.flowpilot.user.UserRole;
 
@@ -34,6 +35,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -61,6 +63,9 @@ class KnowledgeControllerTests {
 
     @Autowired
     private CsrfTokenRepository csrfTokenRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @MockitoBean
     private VectorStore vectorStore;
@@ -210,12 +215,19 @@ class KnowledgeControllerTests {
     }
 
     private Cookie register(String email, UserRole role) throws Exception {
-        RegisterRequest request = new RegisterRequest(email, "Knowledge User", "StrongPass123", role);
-        MvcResult result = mockMvc.perform(post("/api/auth/register")
+        userRepository.save(new AppUser(
+                email,
+                "Knowledge User",
+                passwordEncoder.encode("StrongPass123"),
+                role
+        ));
+
+        LoginRequest request = new LoginRequest(email, "StrongPass123");
+        MvcResult result = mockMvc.perform(post("/api/auth/login")
                         .with(csrf(csrfTokenRepository))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
+                .andExpect(status().isOk())
                 .andReturn();
 
         return result.getResponse().getCookie("FLOWPILOT_ACCESS_TOKEN");

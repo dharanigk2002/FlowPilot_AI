@@ -81,4 +81,16 @@ public class AppUser {
     public UserRole getRole() {
         return role;
     }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void changeRole(UserRole role) {
+        this.role = role;
+    }
 }

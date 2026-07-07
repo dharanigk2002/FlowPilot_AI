@@ -67,6 +67,26 @@ public class SupportCase {
     @Column(nullable = false)
     private Instant updatedAt;
 
+    @Column(nullable = false)
+    private boolean active = true;
+
+    private Instant closedAt;
+
+    private Instant archivedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 40)
+    private AgentSuggestedAction agentSuggestedAction;
+
+    @Column(columnDefinition = "text")
+    private String agentRecommendationNotes;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "recommended_by")
+    private AppUser recommendedBy;
+
+    private Instant recommendedAt;
+
     protected SupportCase() {
     }
 
@@ -105,7 +125,33 @@ public class SupportCase {
     }
 
     public void changeStatus(CaseStatus status) {
+        if (status == CaseStatus.CLOSED && this.status != CaseStatus.CLOSED) {
+            closedAt = Instant.now();
+        }
+        if (status != CaseStatus.CLOSED) {
+            closedAt = null;
+            archivedAt = null;
+            active = true;
+        }
         this.status = status;
+    }
+
+    public void archive(Instant archivedAt) {
+        active = false;
+        this.archivedAt = archivedAt;
+    }
+
+    public void submitAgentRecommendation(
+            AgentSuggestedAction suggestedAction,
+            String notes,
+            AppUser recommendedBy,
+            Instant recommendedAt
+    ) {
+        this.agentSuggestedAction = suggestedAction;
+        this.agentRecommendationNotes = notes;
+        this.recommendedBy = recommendedBy;
+        this.recommendedAt = recommendedAt;
+        changeStatus(CaseStatus.PENDING_MANAGER_REVIEW);
     }
 
     public Long getId() {
@@ -158,5 +204,33 @@ public class SupportCase {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public Instant getClosedAt() {
+        return closedAt;
+    }
+
+    public Instant getArchivedAt() {
+        return archivedAt;
+    }
+
+    public AgentSuggestedAction getAgentSuggestedAction() {
+        return agentSuggestedAction;
+    }
+
+    public String getAgentRecommendationNotes() {
+        return agentRecommendationNotes;
+    }
+
+    public AppUser getRecommendedBy() {
+        return recommendedBy;
+    }
+
+    public Instant getRecommendedAt() {
+        return recommendedAt;
     }
 }

@@ -1,0 +1,74 @@
+FlowPilot AI deployment checklist
+==================================
+
+Local Docker deployment
+-----------------------
+
+1. Copy the example environment file:
+
+   PowerShell:
+   Copy-Item .env.example .env
+
+2. Edit .env before starting:
+
+   - Set POSTGRES_PASSWORD to a real password.
+   - Set JWT_SECRET to a long random value, at least 32 characters.
+   - Set INITIAL_ADMIN_EMAIL and INITIAL_ADMIN_PASSWORD for the first admin.
+   - Keep AUTH_COOKIE_SECURE=false for plain localhost HTTP.
+
+3. Build and start all services:
+
+   docker compose -f docker-compose.deploy.yml up --build
+
+4. First startup can take several minutes because the ollama-models service
+   downloads:
+
+   - llama3.2 for chat
+   - nomic-embed-text for embeddings
+
+5. Open:
+
+   - Frontend: http://localhost:3000
+   - Backend health: http://localhost:8080/api/health
+   - Swagger UI: http://localhost:8080/swagger-ui.html
+
+Production notes
+----------------
+
+- NEXT_PUBLIC_API_BASE_URL is compiled into the Next.js browser bundle during
+  docker build. If the public backend URL changes, rebuild the frontend image.
+- CORS_ALLOWED_ORIGINS must contain the exact frontend origin, for example
+  https://app.example.com.
+- If frontend and backend are on HTTPS domains, set:
+
+  AUTH_COOKIE_SECURE=true
+
+- Public registration always creates SUPPORT_AGENT users. The first admin is
+  created from INITIAL_ADMIN_EMAIL and INITIAL_ADMIN_PASSWORD during backend
+  startup if that account does not already exist.
+
+- If frontend and backend are on different sites, also set:
+
+  AUTH_COOKIE_SAME_SITE=None
+
+- Do not expose Postgres publicly in production unless your hosting/network
+  setup explicitly requires it. Prefer a private Docker network or managed DB.
+- Ollama needs enough memory for the selected chat model. On small servers,
+  llama3.2 is the safer default; larger models need larger machines.
+
+Useful commands
+---------------
+
+View logs:
+
+  docker compose -f docker-compose.deploy.yml logs -f backend
+  docker compose -f docker-compose.deploy.yml logs -f frontend
+  docker compose -f docker-compose.deploy.yml logs -f ollama-models
+
+Restart after env changes:
+
+  docker compose -f docker-compose.deploy.yml up --build -d
+
+Stop services:
+
+  docker compose -f docker-compose.deploy.yml down

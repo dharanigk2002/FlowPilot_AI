@@ -7,6 +7,11 @@ export interface CurrentUser {
   role: UserRole;
 }
 
+export interface ManagedUser extends CurrentUser {
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AuthResponse {
   expiresInSeconds: number;
   user: CurrentUser;
@@ -27,6 +32,12 @@ export interface ApiErrorResponse {
 }
 
 export type CasePriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+export type AgentSuggestedAction =
+  | "REFUND"
+  | "COMPENSATION"
+  | "REPLACEMENT"
+  | "REJECT_REQUEST"
+  | "ESCALATE";
 export type CaseStatus =
   | "OPEN"
   | "IN_PROGRESS"
@@ -46,6 +57,15 @@ export interface SupportCase {
   orderValue: number | null;
   priority: CasePriority;
   status: CaseStatus;
+  active: boolean;
+  closedAt: string | null;
+  archivedAt: string | null;
+  agentRecommendation: {
+    suggestedAction: AgentSuggestedAction;
+    notes: string;
+    recommendedBy: Pick<CurrentUser, "id" | "email" | "displayName"> | null;
+    recommendedAt: string;
+  } | null;
   createdBy: Pick<CurrentUser, "id" | "email" | "displayName">;
   createdAt: string;
   updatedAt: string;
@@ -60,6 +80,11 @@ export interface CreateCaseInput {
   orderReference: string | null;
   orderValue: number | null;
   priority: CasePriority;
+}
+
+export interface SubmitAgentRecommendationInput {
+  suggestedAction: AgentSuggestedAction;
+  notes: string;
 }
 
 export interface PageResponse<T> {
