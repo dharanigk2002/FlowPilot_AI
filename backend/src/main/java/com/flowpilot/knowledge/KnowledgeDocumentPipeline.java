@@ -37,8 +37,8 @@ public class KnowledgeDocumentPipeline {
             System.out.println("Preview: " + (text == null ? null : text.substring(0, Math.min(300, text.length()))));
         }
         List<Document> sourceDocuments = extractedDocuments.stream()
-//                .filter(Document::isText)
-//                .filter(document -> document.getText() != null && !document.getText().isBlank())
+                .filter(Document::isText)
+                .filter(document -> document.getText() != null && !document.getText().isBlank())
                 .map(document -> withSourceMetadata(document, documentId, fileName, contentType))
                 .toList();
 
